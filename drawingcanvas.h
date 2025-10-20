@@ -30,6 +30,15 @@ public:
     void paintLines();
     void segmentDetection();
 
+    bool isLineLike(const bool m[3][3]);
+
+    vector<CustomMatrix> findingWindowSize(vector<CustomMatrix>);
+
+    vector<CustomMatrix> reportAllFitting(QImage, vector<CustomMatrix>);
+
+    vector<CustomMatrix> automatedCandidateFinderForFree(QImage, vector<CustomMatrix>);
+
+
 protected:
     // Overridden method to handle painting on the widget
     void paintEvent(QPaintEvent *event) override;

@@ -1,4 +1,5 @@
 #include "drawingcanvas.h"
+#include "CustomMatrix.h"
 
 DrawingCanvas::DrawingCanvas(QWidget *parent)  {
     // Set a minimum size for the canvas
@@ -44,12 +45,141 @@ void DrawingCanvas::segmentDetection(){
                 }
             }
 
-            CustomMatrix mat(local_window);
-
+            CustomMatrix mat(local_window, i, j);
             windows.push_back(mat);
         }
     }
-    return;
+    cout << windows.size() << endl;
+
+    auto windowsCorrectSize = findingWindowSize(windows);
+    cout << "Correct window size : " << windowsCorrectSize.size() << endl;
+
+    reportAllFitting(image, windowsCorrectSize);
+}
+
+bool DrawingCanvas::isLineLike(const bool m[3][3]){
+    int verticalCount = 0;
+    int horizontalCount = 0;
+    int diag1Count = 0;
+    int diag2Count = 0;
+
+    // Count pixels in each possible direction
+    for (int i = 0; i < 3; i++) {
+        if (m[0][i] && m[1][i] && m[2][i]) verticalCount++;
+        if (m[i][0] && m[i][1] && m[i][2]) horizontalCount++;
+    }
+
+    // Diagonals
+    if (m[0][0] && m[1][1] && m[2][2]) diag1Count++;
+    if (m[0][2] && m[1][1] && m[2][0]) diag2Count++;
+
+    // Consider candidate if any direction has at least 1 full or nearly full alignment
+    return (verticalCount > 0 || horizontalCount > 0 || diag1Count > 0 || diag2Count > 0);
+}
+
+vector<CustomMatrix> DrawingCanvas::findingWindowSize(vector<CustomMatrix> windows){
+
+    size_t writeIndex = 0;
+    size_t removedCount = 0;
+
+    for (size_t readIndex = 0; readIndex < windows.size(); ++readIndex) {
+        if (!windows[readIndex].isAllFalse()) {
+            if (writeIndex != readIndex)
+                windows[writeIndex] = std::move(windows[readIndex]);
+            ++writeIndex;
+        } else {
+            ++removedCount;
+        }
+    }
+
+    windows.resize(writeIndex);
+
+    return windows;
+}
+
+vector<CustomMatrix> DrawingCanvas::reportAllFitting(QImage image, vector<CustomMatrix> windows){
+    size_t writeIndex = 0;
+    if (windows.empty()){ return windows; }
+
+    bool vertical[3][3] = {
+        {0,1,0},
+        {0,1,0},
+        {0,1,0}
+    };
+
+    bool horizontal[3][3] = {
+        {1,1,1},
+        {0,0,0},
+        {0,0,0}
+    };
+
+    bool diagonal1[3][3] = {
+        {1,0,0},
+        {0,1,0},
+        {0,0,1}
+    };
+
+    bool diagonal2[3][3] = {
+        {0,0,1},
+        {0,1,0},
+        {1,0,0}
+    };
+
+    QPainter painter(&image);
+    QPen pen(QColor(128, 0, 128));
+    pen.setWidth(1);
+    painter.setPen(pen);
+
+    int matchCount = 0;
+
+    for (size_t readIndex = 0; readIndex < windows.size(); ++readIndex) {
+        if (!windows[readIndex].isPatternMatch(windows[readIndex].mat,vertical)) {
+            cout << "vertical line segment at : " << windows[readIndex].originx << ", " << windows[readIndex].originy << endl;
+        }
+        else if (!windows[readIndex].isPatternMatch(windows[readIndex].mat,horizontal)) {
+            cout << "horizontal line segment at : " << windows[readIndex].originx << ", " << windows[readIndex].originy << endl;
+        }
+        else if (!windows[readIndex].isPatternMatch(windows[readIndex].mat,diagonal1)) {
+            cout << "lr diagonal line segment at : " << windows[readIndex].originx << ", " << windows[readIndex].originy << endl;
+        }
+        else if (!windows[readIndex].isPatternMatch(windows[readIndex].mat,diagonal2)) {
+            cout << "rl diagonal line segment at : " << windows[readIndex].originx << ", " << windows[readIndex].originy << endl;
+        }
+
+        int rectSize = 3;
+        painter.drawRect(windows[readIndex].originx - rectSize / 2, windows[readIndex].originy - rectSize / 2, rectSize, rectSize);
+    }
+
+    windows.resize(writeIndex);
+
+    return windows;
+}
+
+vector<CustomMatrix> DrawingCanvas::automatedCandidateFinderForFree(QImage image, vector<CustomMatrix> windows){
+    vector<CustomMatrix> candidates;
+
+    QPainter painter2(this);
+
+    QPen pen2(Qt::green, 5);
+    painter2.setPen(pen2);
+    painter2.setBrush(QBrush(Qt::green));
+
+    pen2.setColor(Qt::green);
+    pen2.setWidth(4); // 4-pixel wide line
+    pen2.setStyle(Qt::SolidLine);
+    painter2.setPen(pen2);
+
+    for (size_t readIndex = 0; readIndex < windows.size(); ++readIndex) {
+        if (isLineLike(windows[readIndex].mat)) {
+            candidates.push_back(windows[readIndex]);
+
+            // Draw candidate marker
+            painter2.drawRect(windows[readIndex].originx - 2, windows[readIndex].originy - 2, 4, 4);
+        }
+    }
+
+    std::cout << "Detected " << candidates.size() << " potential segment candidates.\n";
+    return candidates;
 }
 
 void DrawingCanvas::paintEvent(QPaintEvent *event){
